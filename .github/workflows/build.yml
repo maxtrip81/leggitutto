@@ -52,9 +52,9 @@ jobs:
             dist/*.dmg
 
   release:
-    # Pubblica una Release con i tre file scaricabili quando si crea un tag "v...".
+    # Pubblica una Release con i tre file scaricabili (avvio manuale o tag "v...").
     needs: build
-    if: ${{ !cancelled() && startsWith(github.ref, 'refs/tags/v') }}
+    if: ${{ !cancelled() && (github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')) }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -74,5 +74,11 @@ jobs:
             [ -n "$f" ] && cp "$f" upload/LeggiTutto-$name.dmg
           done
           ls -la upload
-          gh release create "$GITHUB_REF_NAME" upload/* --repo "$GITHUB_REPOSITORY" \
-            --title "LeggiTutto ${GITHUB_REF_NAME#v}" --notes-file packaging/release_notes.md
+          version=$(python3 -c "import re; print(re.search(r'__version__ = \"(.+?)\"', open('leggitutto/__init__.py').read()).group(1))")
+          tag="v$version"
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$tag" upload/* --clobber --repo "$GITHUB_REPOSITORY"
+          else
+            gh release create "$tag" upload/* --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+              --title "LeggiTutto $version" --notes-file packaging/release_notes.md
+          fi
