@@ -12,6 +12,7 @@ import threading
 from dataclasses import dataclass
 from pathlib import Path
 
+from .i18n import _, ngettext
 from .model import Cancelled, ConversionError, Context, Extracted
 from .settings import LANGUAGES, Options, models_dir
 
@@ -44,9 +45,9 @@ def load_whisper(name: str, use_gpu: bool, ctx: Context):
     with _models_lock:
         if key in _models:
             return _models[key]
-        ctx.log(f"Caricamento del modello di riconoscimento vocale «{name}». "
-                "Al primo utilizzo viene scaricato da Internet: può richiedere alcuni minuti.")
-        ctx.progress(0.0, "Preparazione del riconoscimento vocale")
+        ctx.log(_("Caricamento del modello di riconoscimento vocale «{name}». "
+                  "Al primo utilizzo viene scaricato da Internet: può richiedere alcuni minuti.").format(name=name))
+        ctx.progress(0.0, _("Preparazione del riconoscimento vocale"))
         kwargs = dict(download_root=str(models_dir() / "whisper"), cpu_threads=max(1, min(8, os.cpu_count() or 4)))
         try:
             if use_gpu:
@@ -55,12 +56,12 @@ def load_whisper(name: str, use_gpu: bool, ctx: Context):
                 model = WhisperModel(name, device="cpu", compute_type="int8", **kwargs)
         except Exception as exc:
             if use_gpu:
-                ctx.warn(f"scheda video non utilizzabile ({exc}), uso il processore.")
+                ctx.warn(_("scheda video non utilizzabile ({exc}), uso il processore.").format(exc=exc))
                 model = WhisperModel(name, device="cpu", compute_type="int8", **kwargs)
             else:
-                raise ConversionError(
-                    f"impossibile caricare il modello vocale «{name}». Controlla la connessione a Internet "
-                    f"(serve solo la prima volta). Dettagli: {exc}") from exc
+                raise ConversionError(_(
+                    "impossibile caricare il modello vocale «{name}». Controlla la connessione a Internet "
+                    "(serve solo la prima volta). Dettagli: {exc}").format(name=name, exc=exc)) from exc
         _models.clear()  # un solo modello in memoria alla volta
         _models[key] = model
         return model
@@ -76,12 +77,12 @@ def _duration_words(seconds: float) -> str:
     h, m, s = seconds // 3600, seconds % 3600 // 60, seconds % 60
     parts = []
     if h:
-        parts.append(f"{h} {'ora' if h == 1 else 'ore'}")
+        parts.append(ngettext(h, "{n} ora", "{n} ore").format(n=h))
     if m:
-        parts.append(f"{m} {'minuto' if m == 1 else 'minuti'}")
+        parts.append(ngettext(m, "{n} minuto", "{n} minuti").format(n=m))
     if s or not parts:
-        parts.append(f"{s} {'secondo' if s == 1 else 'secondi'}")
-    return " e ".join([", ".join(parts[:-1]), parts[-1]]) if len(parts) > 1 else parts[0]
+        parts.append(ngettext(s, "{n} secondo", "{n} secondi").format(n=s))
+    return (" %s " % _("e")).join([", ".join(parts[:-1]), parts[-1]]) if len(parts) > 1 else parts[0]
 
 
 def assign_speakers(words: list[Word], turns: list[tuple[float, float, int]]):
@@ -145,10 +146,10 @@ def decode_audio(path: Path, ctx: Context):
     try:
         container = av.open(str(path))
     except Exception as exc:
-        raise ConversionError(f"il file audio o video non si apre ({exc}).") from exc
+        raise ConversionError(_("il file audio o video non si apre ({exc}).").format(exc=exc)) from exc
     with container:
         if not container.streams.audio:
-            raise ConversionError("il file non contiene una traccia audio.")
+            raise ConversionError(_("il file non contiene una traccia audio."))
         stream = container.streams.audio[0]
         total = float(container.duration or 0) / 1_000_000
         resampler = av.AudioResampler(format="s16", layout="mono", rate=SAMPLE_RATE)
@@ -158,25 +159,25 @@ def decode_audio(path: Path, ctx: Context):
                 for out in resampler.resample(frame):
                     chunks.append(out.to_ndarray().reshape(-1).copy())
                 if total and frame.time and len(chunks) % 200 == 0:
-                    ctx.progress(0.0, f"Estrazione dell'audio: {min(99, int(frame.time * 100 / total))}%")
+                    ctx.progress(0.0, _("Estrazione dell'audio: {percent}%").format(percent=min(99, int(frame.time * 100 / total))))
             for out in resampler.resample(None):
                 chunks.append(out.to_ndarray().reshape(-1).copy())
         except av.error.FFmpegError as exc:
             if not chunks:
-                raise ConversionError(f"traccia audio non leggibile ({exc}).") from exc
-            ctx.warn("la parte finale del file è danneggiata: trascritto solo l'inizio.")
+                raise ConversionError(_("traccia audio non leggibile ({exc}).").format(exc=exc)) from exc
+            ctx.warn(_("la parte finale del file è danneggiata: trascritto solo l'inizio."))
     if not chunks:
         return np.zeros(0, dtype=np.float32)
     return np.concatenate(chunks).astype(np.float32) / 32768.0
 
 
 def transcribe(path: Path, opts: Options, ctx: Context) -> Extracted:
-    ctx.progress(0.0, "Estrazione dell'audio")
+    ctx.progress(0.0, _("Estrazione dell'audio"))
     audio = decode_audio(path, ctx)
     duration = len(audio) / SAMPLE_RATE
     if duration < 0.3:
-        raise ConversionError("la traccia audio è vuota.")
-    ctx.log(f"Durata: {_duration_words(duration)}.")
+        raise ConversionError(_("la traccia audio è vuota."))
+    ctx.log(_("Durata: {duration}.").format(duration=_duration_words(duration)))
 
     model = load_whisper(opts.whisper_model, opts.use_gpu, ctx)
     share = 0.8 if opts.diarize else 1.0
@@ -189,15 +190,15 @@ def transcribe(path: Path, opts: Options, ctx: Context) -> Extracted:
         word_timestamps=True,
         condition_on_previous_text=False,
     )
-    language = dict(LANGUAGES).get(info.language, info.language)
+    language = _(dict(LANGUAGES).get(info.language, info.language))
     if not opts.language:
-        ctx.log(f"Lingua riconosciuta: {language}.")
+        ctx.log(_("Lingua riconosciuta: {language}.").format(language=language))
 
     words: list[Word] = []
     previous = ""
     repeats = 0
     for seg in segments:
-        ctx.progress(share * min(seg.end / duration, 1.0), f"Trascrizione: {_clock(seg.end)} di {_clock(duration)}")
+        ctx.progress(share * min(seg.end / duration, 1.0), _("Trascrizione: {done} di {total}").format(done=_clock(seg.end), total=_clock(duration)))
         text = seg.text.strip()
         if not text or _HALLUCINATIONS.match(text):
             continue
@@ -213,7 +214,7 @@ def transcribe(path: Path, opts: Options, ctx: Context) -> Extracted:
             words.append(Word(seg.start, seg.end, " " + text))
 
     if not words:
-        return Extracted(final=f"Nel file «{path.name}» non è stato riconosciuto parlato.\n")
+        return Extracted(final=_("Nel file «{name}» non è stato riconosciuto parlato.").format(name=path.name) + "\n")
 
     speakers = 1
     if opts.diarize:
@@ -232,19 +233,19 @@ def transcribe(path: Path, opts: Options, ctx: Context) -> Extracted:
         except (Cancelled, ConversionError):
             raise
         except Exception as exc:
-            ctx.warn(f"non è stato possibile distinguere le voci ({exc}); trascrizione senza nomi.")
+            ctx.warn(_("non è stato possibile distinguere le voci ({exc}); trascrizione senza nomi.").format(exc=exc))
 
     labels = opts.diarize and speakers > 1
     lines = [
-        f"Trascrizione di «{path.name}»",
-        f"Durata: {_duration_words(duration)}. Lingua: {language}."
-        + (f" Voci diverse riconosciute: {speakers}." if opts.diarize else ""),
+        _("Trascrizione di «{name}»").format(name=path.name),
+        _("Durata: {duration}. Lingua: {language}.").format(duration=_duration_words(duration), language=language)
+        + (" " + _("Voci diverse riconosciute: {n}.").format(n=speakers) if opts.diarize else ""),
         "",
     ]
     for start, spk, text in _paragraphs(words, labels):
         prefix = f"[{_clock(start)}] " if opts.timestamps else ""
-        who = f"Persona {spk}: " if labels else ""
+        who = _("Persona {n}").format(n=spk) + ": " if labels else ""
         lines.append(prefix + who + text)
         lines.append("")
-    ctx.progress(1.0, "Trascrizione completata")
+    ctx.progress(1.0, _("Trascrizione completata"))
     return Extracted(final="\n".join(lines))

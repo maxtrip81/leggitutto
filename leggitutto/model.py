@@ -115,7 +115,9 @@ class Context:
     def warn(self, message: str):
         if message not in self.warnings:
             self.warnings.append(message)
-            self.log("Attenzione: " + message)
+            from .i18n import _
+
+            self.log(_("Attenzione: {message}").format(message=message))
 
     def ask_password(self, filename: str, attempt: int) -> Optional[str]:
         if self._ask_password is None:

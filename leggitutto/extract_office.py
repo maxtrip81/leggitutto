@@ -12,6 +12,7 @@ from pathlib import Path
 from lxml import etree
 
 from . import external
+from .i18n import _
 from .model import ConversionError, Context, Extracted, Para, ProtectedError
 from .settings import Options
 
@@ -33,7 +34,7 @@ def table_to_paras(rows: list[list[str]]) -> list[Para]:
     out = []
     if use_header:
         for row in rows[1:]:
-            cells = [f"{header[i] if i < len(header) and header[i] else f'Colonna {i + 1}'}: {c}" for i, c in enumerate(row) if c]
+            cells = [f"{header[i] if i < len(header) and header[i] else _('Colonna {n}').format(n=i + 1)}: {c}" for i, c in enumerate(row) if c]
             if cells:
                 out.append(Para("; ".join(cells) + "."))
     else:
@@ -69,7 +70,7 @@ def decrypt_office(path: Path, ctx: Context) -> io.BytesIO | None:
             if password is None:
                 password = ctx.ask_password(path.name, attempt - 1)
                 if password is None:
-                    raise ProtectedError("il documento è protetto da password e non è stata inserita la password.")
+                    raise ProtectedError(_("il documento è protetto da password e non è stata inserita la password."))
             try:
                 fh.seek(0)
                 office = msoffcrypto.OfficeFile(fh)
@@ -80,7 +81,7 @@ def decrypt_office(path: Path, ctx: Context) -> io.BytesIO | None:
                 return out
             except Exception:
                 continue
-    raise ProtectedError("la password inserita non è corretta.")
+    raise ProtectedError(_("la password inserita non è corretta."))
 
 
 # ---------------------------------------------------------------------------
@@ -107,7 +108,7 @@ def extract_docx(path: Path, opts: Options, ctx: Context, data=None) -> Extracte
     try:
         document = docx.Document(data or str(path))
     except Exception as exc:
-        raise ConversionError(f"documento Word non leggibile: {exc}") from exc
+        raise ConversionError(_("documento Word non leggibile: {exc}").format(exc=exc)) from exc
     paras: list[Para] = []
     w = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
 
@@ -207,17 +208,19 @@ def _odf_blocks(el, opts: Options, paras: list[Para], notes: list[Para]):
                         cells.extend([value] * (repeat if value else 1))
                 rows.append(cells)
             if child.getparent() is not None and child.getparent().tag == _q("office", "spreadsheet"):
-                paras.append(Para("Foglio: " + child.get(_q("table", "name"), ""), kind="heading"))
+                paras.append(Para(_("Foglio: {name}").format(name=child.get(_q("table", "name"), "")), kind="heading"))
             paras.extend(table_to_paras(rows))
         elif tag == _q("draw", "page"):
-            paras.append(Para("Diapositiva " + str(len([p for p in paras if p.text.startswith("Diapositiva ")]) + 1), kind="heading"))
+            slide_label = _("Diapositiva {n}").format(n="")
+            number = len([p for p in paras if p.kind == "heading" and p.text.startswith(slide_label)]) + 1
+            paras.append(Para(_("Diapositiva {n}").format(n=number), kind="heading"))
             _odf_blocks(child, opts, paras, notes)
         elif tag == _q("presentation", "notes"):
             if opts.include_slide_notes:
                 sub: list[Para] = []
                 _odf_blocks(child, opts, sub, notes)
                 if sub:
-                    paras.append(Para("Note del relatore:"))
+                    paras.append(Para(_("Note del relatore:")))
                     paras.extend(sub)
         elif tag in (_q("text", "table-of-content"), _q("text", "illustration-index")):
             body = child.find(_q("text", "index-body"))
@@ -233,18 +236,18 @@ def extract_odf(path: Path, opts: Options, ctx: Context) -> Extracted:
             if "META-INF/manifest.xml" in zf.namelist():
                 manifest = zf.read("META-INF/manifest.xml")
                 if b"encryption-data" in manifest:
-                    raise ProtectedError(
+                    raise ProtectedError(_(
                         "il documento OpenDocument è cifrato con password: aprilo con LibreOffice "
-                        "e salvalo senza password, poi riprova.")
+                        "e salvalo senza password, poi riprova."))
             root = etree.fromstring(zf.read("content.xml"), etree.XMLParser(huge_tree=True, recover=True))
     except (zipfile.BadZipFile, KeyError) as exc:
-        raise ConversionError(f"documento OpenDocument non leggibile: {exc}") from exc
+        raise ConversionError(_("documento OpenDocument non leggibile: {exc}").format(exc=exc)) from exc
     body = root.find(_q("office", "body"))
     paras: list[Para] = []
     notes: list[Para] = []
     _odf_blocks(body if body is not None else root, opts, paras, notes)
     if notes:
-        paras.append(Para("Note", kind="heading"))
+        paras.append(Para(_("Note"), kind="heading"))
         paras.extend(notes)
     return Extracted(paras=paras)
 
@@ -303,7 +306,7 @@ def extract_pptx(path: Path, opts: Options, ctx: Context, data=None) -> Extracte
     try:
         pres = Presentation(data or str(path))
     except Exception as exc:
-        raise ConversionError(f"presentazione non leggibile: {exc}") from exc
+        raise ConversionError(_("presentazione non leggibile: {exc}").format(exc=exc)) from exc
     skip = {PP_PLACEHOLDER.SLIDE_NUMBER, PP_PLACEHOLDER.FOOTER, PP_PLACEHOLDER.DATE}
     paras: list[Para] = []
 
@@ -330,17 +333,17 @@ def extract_pptx(path: Path, opts: Options, ctx: Context, data=None) -> Extracte
 
     total = len(pres.slides)
     for n, slide in enumerate(pres.slides, 1):
-        ctx.progress(n / max(total, 1), f"Diapositiva {n} di {total}")
+        ctx.progress(n / max(total, 1), _("Diapositiva {n} di {total}").format(n=n, total=total))
         title_shape = slide.shapes.title
         title = title_shape.text_frame.text.strip() if title_shape is not None and title_shape.has_text_frame else ""
-        paras.append(Para(f"Diapositiva {n}" + (f": {title}" if title else ""), kind="heading"))
+        paras.append(Para(_("Diapositiva {n}").format(n=n) + (f": {title}" if title else ""), kind="heading"))
         shapes = [s for s in slide.shapes if title_shape is None or s.shape_id != title_shape.shape_id]
         for shape in sorted(shapes, key=lambda s: ((s.top or 0), (s.left or 0))):
             shape_paras(shape, paras)
         if opts.include_slide_notes and slide.has_notes_slide:
             notes = slide.notes_slide.notes_text_frame.text.strip() if slide.notes_slide.notes_text_frame else ""
             if notes:
-                paras.append(Para("Note del relatore: " + notes))
+                paras.append(Para(_("Note del relatore:") + " " + notes))
     return Extracted(paras=paras)
 
 
@@ -350,7 +353,7 @@ def extract_pptx(path: Path, opts: Options, ctx: Context, data=None) -> Extracte
 def _sheet_paras(name: str, rows, paras: list[Para], multiple: bool):
     rows = [["" if v is None else _cell_str(v) for v in row] for row in rows]
     if multiple:
-        paras.append(Para(f"Foglio: {name}", kind="heading"))
+        paras.append(Para(_("Foglio: {name}").format(name=name), kind="heading"))
     paras.extend(table_to_paras(rows))
 
 
@@ -369,7 +372,7 @@ def extract_xlsx(path: Path, opts: Options, ctx: Context, data=None) -> Extracte
     try:
         wb = openpyxl.load_workbook(data or str(path), read_only=True, data_only=True)
     except Exception as exc:
-        raise ConversionError(f"foglio di calcolo non leggibile: {exc}") from exc
+        raise ConversionError(_("foglio di calcolo non leggibile: {exc}").format(exc=exc)) from exc
     paras: list[Para] = []
     for ws in wb.worksheets:
         _sheet_paras(ws.title, ws.iter_rows(values_only=True), paras, len(wb.worksheets) > 1)
@@ -383,7 +386,7 @@ def extract_xls(path: Path, opts: Options, ctx: Context) -> Extracted:
     try:
         book = xlrd.open_workbook(file_contents=data.read()) if data else xlrd.open_workbook(str(path))
     except Exception as exc:
-        raise ConversionError(f"foglio di calcolo non leggibile: {exc}") from exc
+        raise ConversionError(_("foglio di calcolo non leggibile: {exc}").format(exc=exc)) from exc
     paras: list[Para] = []
     for sheet in book.sheets():
         rows = [sheet.row_values(r) for r in range(sheet.nrows)]
@@ -420,7 +423,7 @@ def _via_libreoffice(path: Path, opts: Options, ctx: Context) -> Extracted:
         try:
             converted = external.libreoffice_convert(path, target, tmp_dir)
         except Exception as exc:
-            ctx.log(f"LibreOffice non è riuscito a convertire il file: {exc}")
+            ctx.log(_("LibreOffice non è riuscito a convertire il file: {exc}").format(exc=exc))
         if converted is None and external.find_program("textutil") and target == "docx":
             out = tmp_dir / (path.stem + ".docx")
             external.run(["textutil", "-convert", "docx", "-output", str(out), str(path)])
@@ -428,9 +431,9 @@ def _via_libreoffice(path: Path, opts: Options, ctx: Context) -> Extracted:
         if converted is None and target == "docx":
             converted = _word_com_convert(path, tmp_dir)
         if converted is None:
-            raise ConversionError(
-                f"per i file {path.suffix} serve LibreOffice (gratuito, www.libreoffice.org) "
-                "oppure Microsoft Word installato sul computer.")
+            raise ConversionError(_(
+                "per i file {ext} serve LibreOffice (gratuito, www.libreoffice.org) "
+                "oppure Microsoft Word installato sul computer.").format(ext=path.suffix))
         return extract(converted, opts, ctx)
 
 

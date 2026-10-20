@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import re
 from functools import lru_cache
-from typing import Optional
 
 from .external import find_program
+from .i18n import _
 from .model import Block, Line
 
 
@@ -60,7 +60,7 @@ def image_blocks(image, languages: str) -> tuple[list[Block], float]:
     """
     tess = _tesseract()
     if tess is None:
-        raise RuntimeError("Tesseract non è installato")
+        raise RuntimeError(_("Tesseract non è installato"))
     if image.mode not in ("RGB", "L"):
         image = image.convert("RGB")
     # Tesseract lavora meglio a circa 300 dpi: le immagini piccole vengono ingrandite.
@@ -105,10 +105,3 @@ def image_blocks(image, languages: str) -> tuple[list[Block], float]:
         if lines:
             blocks.append(Block(lines, raw_start=lines[0].text[:12]))
     return blocks, float(image.height)
-
-
-def missing_message() -> Optional[str]:
-    if available():
-        return None
-    return ("contiene immagini o pagine scansionate: per leggerle installa Tesseract OCR "
-            "(vedi la Guida, tasto F1). ")

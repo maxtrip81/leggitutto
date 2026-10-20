@@ -13,6 +13,7 @@ from . import extract_office as office
 from . import extract_pdf as pdf
 from . import extract_web as web
 from .cleaner import finalize
+from .i18n import _
 from .model import ConversionError, Context, Extracted, Para
 from .settings import Options
 
@@ -136,7 +137,7 @@ def _sniff(path: Path) -> Extractor | None:
 def _encrypted_ooxml(path: Path, opts: Options, ctx: Context) -> Extracted:
     data = office.decrypt_office(path, ctx)
     if data is None:
-        raise ConversionError("documento Office non riconosciuto.")
+        raise ConversionError(_("documento Office non riconosciuto."))
     with zipfile.ZipFile(data) as zf:
         names = set(zf.namelist())
     data.seek(0)
@@ -161,15 +162,15 @@ def extract_archive(path: Path, opts: Options, ctx: Context) -> Extracted:
                 with zf.open(member) as src:
                     target.write_bytes(src.read())
             except RuntimeError as exc:  # zip con password
-                raise ConversionError(f"l'archivio è protetto da password: {exc}") from exc
-            ctx.log(f"Archivio: conversione di {member.filename}")
+                raise ConversionError(_("l'archivio è protetto da password: {exc}").format(exc=exc)) from exc
+            ctx.log(_("Archivio: conversione di {name}").format(name=member.filename))
             try:
                 text = finalize(extract(target, opts, ctx), opts)
             except ConversionError as exc:
                 ctx.warn(f"{member.filename}: {exc}")
                 continue
             if text.strip():
-                paras.append(Para(f"File: {member.filename}", kind="heading"))
+                paras.append(Para(_("File: {name}").format(name=member.filename), kind="heading"))
                 paras.append(Para(text, kind="pre"))
     return Extracted(paras=paras)
 
@@ -180,15 +181,15 @@ BY_EXTENSION[".zip"] = extract_archive
 def extract(path: Path, opts: Options, ctx: Context) -> Extracted:
     path = Path(path)
     if not path.is_file():
-        raise ConversionError("il file non esiste o non è leggibile.")
+        raise ConversionError(_("il file non esiste o non è leggibile."))
     if path.stat().st_size == 0:
-        raise ConversionError("il file è vuoto.")
+        raise ConversionError(_("il file è vuoto."))
     suffix = path.suffix.lower()
     if path.name.lower().endswith(".fb2.zip"):
         suffix = ".fb2"
     extractor = BY_EXTENSION.get(suffix) or _sniff(path)
     if extractor is None:
-        raise ConversionError(f"formato del file non riconosciuto ({suffix or 'senza estensione'}).")
+        raise ConversionError(_("formato del file non riconosciuto ({ext}).").format(ext=suffix or _("senza estensione")))
     return extractor(path, opts, ctx)
 
 
@@ -199,7 +200,7 @@ def supported_extensions() -> list[str]:
 def output_path(src: Path, opts: Options, taken: set | None = None) -> Path:
     """Nome del file di testo; ``taken`` evita che due file dello stesso lotto si sovrascrivano."""
     folder = Path(opts.output_dir) if opts.output_dir else src.parent
-    name = src.stem + (" (testo).txt" if src.suffix.lower() == ".txt" else ".txt")
+    name = src.stem + ((" (%s).txt" % _("testo")) if src.suffix.lower() == ".txt" else ".txt")
     target = folder / name
     if taken is not None:
         n = 1
@@ -232,7 +233,7 @@ def convert_file(src: Path, opts: Options, ctx: Context, taken: set | None = Non
         ctx.warn(warning)
     text = finalize(extracted, opts)
     if not text.strip():
-        raise ConversionError("nel file non è stato trovato testo da salvare.")
+        raise ConversionError(_("nel file non è stato trovato testo da salvare."))
     target = output_path(src, opts, taken)
     target.parent.mkdir(parents=True, exist_ok=True)
     if os.linesep != "\n":

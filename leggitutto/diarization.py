@@ -14,6 +14,7 @@ import tempfile
 import urllib.request
 from pathlib import Path
 
+from .i18n import _
 from .model import Context
 from .settings import models_dir
 
@@ -33,7 +34,7 @@ def _ssl_context():
 
 def download(url: str, dest: Path, ctx: Context, label: str):
     dest.parent.mkdir(parents=True, exist_ok=True)
-    ctx.log(f"Scaricamento di {label} (solo la prima volta)...")
+    ctx.log(_("Scaricamento di {label} (solo la prima volta)...").format(label=label))
     tmp = dest.with_suffix(dest.suffix + ".part")
     request = urllib.request.Request(url, headers={"User-Agent": "LeggiTutto"})
     with urllib.request.urlopen(request, context=_ssl_context(), timeout=60) as response, open(tmp, "wb") as out:
@@ -47,7 +48,7 @@ def download(url: str, dest: Path, ctx: Context, label: str):
             out.write(chunk)
             done += len(chunk)
             if total:
-                ctx.progress(done / total, f"Scaricamento di {label}: {done * 100 // total}%")
+                ctx.progress(done / total, _("Scaricamento di {label}: {percent}%").format(label=label, percent=done * 100 // total))
     os.replace(tmp, dest)
 
 
@@ -59,7 +60,7 @@ def ensure_models(ctx: Context) -> tuple[Path, Path]:
     if not segmentation.is_file():
         with tempfile.TemporaryDirectory() as tmp:
             archive = Path(tmp) / "seg.tar.bz2"
-            download(SEGMENTATION_URL, archive, ctx, "modello di segmentazione delle voci")
+            download(SEGMENTATION_URL, archive, ctx, _("modello di segmentazione delle voci"))
             with tarfile.open(archive) as tar:
                 member = next(m for m in tar.getmembers() if m.name.endswith("/model.onnx"))
                 partial = segmentation.with_suffix(".part")
@@ -67,7 +68,7 @@ def ensure_models(ctx: Context) -> tuple[Path, Path]:
                     shutil.copyfileobj(src, dst)
                 os.replace(partial, segmentation)
     if not embedding.is_file():
-        download(EMBEDDING_URL, embedding, ctx, "modello di riconoscimento delle voci")
+        download(EMBEDDING_URL, embedding, ctx, _("modello di riconoscimento delle voci"))
     return segmentation, embedding
 
 
@@ -91,14 +92,14 @@ def diarize(samples, ctx: Context, num_speakers: int = 0, progress_base: float =
         min_duration_off=0.5,
     )
     if not config.validate():
-        raise RuntimeError("configurazione dei modelli delle voci non valida")
+        raise RuntimeError(_("configurazione dei modelli delle voci non valida"))
     engine = sherpa_onnx.OfflineSpeakerDiarization(config)
 
     def callback(done, total):
         if ctx.cancel_event.is_set():
             return 1  # interrompe l'elaborazione
         if total:
-            ctx.progress(progress_base + progress_span * done / total, "Riconoscimento delle voci")
+            ctx.progress(progress_base + progress_span * done / total, _("Riconoscimento delle voci"))
         return 0
 
     result = engine.process(samples, callback=callback).sort_by_start_time()

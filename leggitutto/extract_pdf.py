@@ -12,6 +12,7 @@ from pathlib import Path
 
 from . import ocr
 from .cleaner import join_lines, starts_list_item
+from .i18n import _
 from .model import Block, ConversionError, Context, Extracted, Line, Para, ProtectedError
 from .settings import Options
 
@@ -84,7 +85,7 @@ def blocks_to_paras(blocks: list[Block], page_h: float, body: float, opts: Optio
     # Bordo destro della colonna di ogni riga: serve a capire se una riga è "piena".
     def right_edge(line: Line) -> float:
         tol = 3 * max(line.size, 1)
-        return max((l.x1 for l, _ in body_lines if l is not None and abs(l.x0 - line.x0) <= tol), default=line.x1)
+        return max((l.x1 for l, _idx in body_lines if l is not None and abs(l.x0 - line.x0) <= tol), default=line.x1)
 
     current: list[Line] = []
 
@@ -142,16 +143,16 @@ def _open_document(path: Path, ctx: Context, filetype: str | None = None):
     try:
         doc = pymupdf.open(str(path), filetype=filetype) if filetype else pymupdf.open(str(path))
     except Exception as exc:
-        raise ConversionError(f"il file non si apre (forse è danneggiato): {exc}") from exc
+        raise ConversionError(_("il file non si apre (forse è danneggiato): {exc}").format(exc=exc)) from exc
     if doc.needs_pass:
         for attempt in range(3):
             password = ctx.ask_password(path.name, attempt)
             if password is None:
-                raise ProtectedError("il documento è protetto da password e non è stata inserita la password.")
+                raise ProtectedError(_("il documento è protetto da password e non è stata inserita la password."))
             if doc.authenticate(password):
                 break
         else:
-            raise ProtectedError("la password inserita non è corretta.")
+            raise ProtectedError(_("la password inserita non è corretta."))
     return doc
 
 
@@ -263,10 +264,10 @@ def extract_pdf(path: Path, opts: Options, ctx: Context, filetype: str | None = 
     result = Extracted(pages=[])
     total = len(doc)
     if total == 0:
-        raise ConversionError("il documento non contiene pagine.")
+        raise ConversionError(_("il documento non contiene pagine."))
 
     # Primo passaggio: dimensione del carattere del corpo del testo.
-    ctx.progress(0.0, "Analisi dell'impaginazione")
+    ctx.progress(0.0, _("Analisi dell'impaginazione"))
     sizes: Counter = Counter()
     cached: dict[int, list[Block]] = {}
     for i in range(min(total, 80)):
@@ -276,7 +277,7 @@ def extract_pdf(path: Path, opts: Options, ctx: Context, filetype: str | None = 
 
     ocr_warned = False
     for i in range(total):
-        ctx.progress(i / total, f"Pagina {i + 1} di {total}")
+        ctx.progress(i / total, _("Pagina {n} di {total}").format(n=i + 1, total=total))
         page = doc[i]
         blocks = cached.pop(i, None)
         if blocks is None:
@@ -289,14 +290,14 @@ def extract_pdf(path: Path, opts: Options, ctx: Context, filetype: str | None = 
                     result.pages.append(_ocr_page(page, opts))
                     continue
                 except Exception as exc:  # l'OCR di una pagina non deve fermare tutto
-                    ctx.warn(f"OCR non riuscito a pagina {i + 1}: {exc}")
+                    ctx.warn(_("OCR non riuscito a pagina {n}: {exc}").format(n=i + 1, exc=exc))
             elif not ocr_warned:
-                ctx.warn("il documento " + ocr.missing_message())
+                ctx.warn(_("il documento contiene immagini o pagine scansionate: per leggerle installa Tesseract OCR (vedi la Guida, tasto F1)."))
                 ocr_warned = True
         result.pages.append(blocks_to_paras(blocks, page.rect.height, body, opts))
     doc.close()
     if not any(result.pages) and not ocr_warned:
-        ctx.warn("nel documento non è stato trovato testo leggibile.")
+        ctx.warn(_("nel documento non è stato trovato testo leggibile."))
     return result
 
 
@@ -304,14 +305,14 @@ def extract_image(path: Path, opts: Options, ctx: Context) -> Extracted:
     from PIL import Image, ImageSequence
 
     if not ocr.available():
-        raise ConversionError("il file è un'immagine: per leggerne il testo installa Tesseract OCR (vedi la Guida, tasto F1).")
+        raise ConversionError(_("il file è un'immagine: per leggerne il testo installa Tesseract OCR (vedi la Guida, tasto F1)."))
     try:
         img = Image.open(path)
     except Exception as exc:
-        raise ConversionError(f"immagine non leggibile: {exc}") from exc
+        raise ConversionError(_("immagine non leggibile: {exc}").format(exc=exc)) from exc
     frames = [frame.copy() for frame in ImageSequence.Iterator(img)]
     pages = []
     for i, frame in enumerate(frames):
-        ctx.progress(i / len(frames), f"Riconoscimento del testo, immagine {i + 1} di {len(frames)}")
+        ctx.progress(i / len(frames), _("Riconoscimento del testo, immagine {n} di {total}").format(n=i + 1, total=len(frames)))
         pages.append(ocr_image_paras(frame, opts))
     return Extracted(pages=pages)

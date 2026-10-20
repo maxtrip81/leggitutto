@@ -8,26 +8,34 @@ import sys
 from pathlib import Path
 
 from .converter import convert_file
+from .i18n import _, set_language
 from .model import Cancelled, ConversionError, Context
-from .settings import ENCODINGS, WHISPER_MODELS, Options
+from .settings import ENCODINGS, UI_LANGUAGES, WHISPER_MODELS, Options
 
 
 def main(argv: list[str]) -> int:
-    parser = argparse.ArgumentParser(prog="leggitutto --cli", description="Converte file di ogni tipo in testo .txt accessibile.")
-    parser.add_argument("files", nargs="+", type=Path, help="file o cartelle da convertire")
-    parser.add_argument("-o", "--output", help="cartella di destinazione (predefinita: accanto all'originale)")
-    parser.add_argument("--password", help="password per i documenti protetti")
-    parser.add_argument("--model", choices=[m for m, _ in WHISPER_MODELS], help="modello di riconoscimento vocale")
-    parser.add_argument("--lang", help="lingua dell'audio, es. it, en (predefinita: automatica)")
-    parser.add_argument("--speakers", type=int, help="numero di persone che parlano (0 = automatico)")
-    parser.add_argument("--no-speakers", action="store_true", help="non distinguere le voci")
-    parser.add_argument("--timestamps", action="store_true", help="aggiungi l'orario a ogni intervento")
-    parser.add_argument("--keep-all", action="store_true", help="non togliere numeri di pagina, note, intestazioni")
-    parser.add_argument("--encoding", choices=[e for e, _ in ENCODINGS])
-    parser.add_argument("--wrap", type=int, help="va a capo ogni N caratteri (0 = mai)")
+    opts = Options.load()
+    # La lingua va decisa prima di costruire i testi di aiuto.
+    if "--ui" in argv[:-1]:
+        opts.ui_language = argv[argv.index("--ui") + 1]
+    set_language(opts.ui_language)
+
+    parser = argparse.ArgumentParser(prog="leggitutto --cli",
+                                     description=_("Converte file di ogni tipo in testo .txt accessibile."))
+    parser.add_argument("files", nargs="+", type=Path, help=_("file o cartelle da convertire"))
+    parser.add_argument("-o", "--output", help=_("cartella di destinazione (predefinita: accanto all'originale)"))
+    parser.add_argument("--password", help=_("password per i documenti protetti"))
+    parser.add_argument("--model", choices=[m for m, _d in WHISPER_MODELS], help=_("modello di riconoscimento vocale"))
+    parser.add_argument("--lang", help=_("lingua dell'audio, es. it, en (predefinita: automatica)"))
+    parser.add_argument("--speakers", type=int, help=_("numero di persone che parlano (0 = automatico)"))
+    parser.add_argument("--no-speakers", action="store_true", help=_("non distinguere le voci"))
+    parser.add_argument("--timestamps", action="store_true", help=_("aggiungi l'orario a ogni intervento"))
+    parser.add_argument("--keep-all", action="store_true", help=_("non togliere numeri di pagina, note, intestazioni"))
+    parser.add_argument("--encoding", choices=[e for e, _d in ENCODINGS])
+    parser.add_argument("--wrap", type=int, help=_("va a capo ogni N caratteri (0 = mai)"))
+    parser.add_argument("--ui", choices=[c for c, _d in UI_LANGUAGES], help=_("lingua dei messaggi (it, en)"))
     args = parser.parse_args(argv)
 
-    opts = Options.load()
     if args.output:
         opts.output_dir = args.output
     if args.model:
@@ -53,7 +61,7 @@ def main(argv: list[str]) -> int:
             return args.password
         if not sys.stdin.isatty():
             return None
-        return getpass.getpass(f"Password per {name}: ") or None
+        return getpass.getpass(_("Password per {name}: ").format(name=name)) or None
 
     def progress(fraction, message):
         if message and sys.stderr.isatty():
@@ -70,10 +78,10 @@ def main(argv: list[str]) -> int:
         ctx = Context(progress=progress, ask_password=ask_password, log=lambda m: print("\n  " + m, file=sys.stderr))
         try:
             out = convert_file(src, opts, ctx, taken)
-            print(f"\r  creato {out}".ljust(80), file=sys.stderr)
+            print(("\r  " + _("creato {path}").format(path=out)).ljust(80), file=sys.stderr)
         except ConversionError as exc:
             errors += 1
-            print(f"\r  errore: {exc}".ljust(80), file=sys.stderr)
+            print(("\r  " + _("errore: {exc}").format(exc=exc)).ljust(80), file=sys.stderr)
         except Cancelled:
             return 130
     return 1 if errors else 0

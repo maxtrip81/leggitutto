@@ -1,6 +1,6 @@
 ﻿; Installazione per Windows (Inno Setup 6). Compila prima con build_windows.bat.
 #ifndef AppVersion
-  #define AppVersion "1.0.1"
+  #define AppVersion "1.1.0"
 #endif
 
 [Setup]
@@ -25,21 +25,38 @@ PrivilegesRequiredOverridesAllowed=dialog
 ArchitecturesInstallIn64BitMode=x64compatible
 WizardStyle=modern
 
+ShowLanguageDialog=yes
+LanguageDetectionMethod=none
+
 [Languages]
+; La prima lingua è quella predefinita: italiano.
 Name: "it"; MessagesFile: "compiler:Languages\Italian.isl"
+Name: "en"; MessagesFile: "compiler:Default.isl"
+
+[CustomMessages]
+it.DesktopIcon=Crea un'icona sul desktop
+en.DesktopIcon=Create a desktop icon
+it.SendTo=Aggiungi LeggiTutto al menu "Invia a" (clic destro su un file)
+en.SendTo=Add LeggiTutto to the "Send to" menu (right-click on a file)
+it.SendToName=LeggiTutto (converti in testo)
+en.SendToName=LeggiTutto (convert to text)
+it.Uninstall=Disinstalla LeggiTutto
+en.Uninstall=Uninstall LeggiTutto
+it.Launch=Avvia LeggiTutto
+en.Launch=Start LeggiTutto
 
 [Tasks]
-Name: "desktopicon"; Description: "Crea un'icona sul desktop"; Flags: unchecked
-Name: "sendto"; Description: "Aggiungi LeggiTutto al menu ""Invia a"" (clic destro su un file)"
+Name: "desktopicon"; Description: "{cm:DesktopIcon}"; Flags: unchecked
+Name: "sendto"; Description: "{cm:SendTo}"
 
 [Files]
 Source: "..\dist\LeggiTutto\*"; DestDir: "{app}"; Flags: recursesubdirs ignoreversion
 
 [Icons]
 Name: "{group}\LeggiTutto"; Filename: "{app}\LeggiTutto.exe"
-Name: "{group}\Disinstalla LeggiTutto"; Filename: "{uninstallexe}"
+Name: "{group}\{cm:Uninstall}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\LeggiTutto"; Filename: "{app}\LeggiTutto.exe"; Tasks: desktopicon
-Name: "{usersendto}\LeggiTutto (converti in testo)"; Filename: "{app}\LeggiTutto.exe"; Tasks: sendto
+Name: "{usersendto}\{cm:SendToName}"; Filename: "{app}\LeggiTutto.exe"; Tasks: sendto
 
 [Run]
-Filename: "{app}\LeggiTutto.exe"; Description: "Avvia LeggiTutto"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\LeggiTutto.exe"; Description: "{cm:Launch}"; Flags: nowait postinstall skipifsilent

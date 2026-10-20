@@ -93,6 +93,8 @@ if sys.platform == "darwin":
         version=__version__,
         info_plist={
             "CFBundleDisplayName": "LeggiTutto",
+            "CFBundleDevelopmentRegion": "it",
+            "CFBundleLocalizations": ["it", "en"],
             "NSHumanReadableCopyright": f"{COPYRIGHT} - {AUTHOR_EMAIL}",
             "CFBundleShortVersionString": __version__,
             "NSHighResolutionCapable": True,

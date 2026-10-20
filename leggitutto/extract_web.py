@@ -24,8 +24,13 @@ from lxml import etree
 from . import external
 from .cleaner import reflow_plain_text
 from .extract_office import table_to_paras
+from .i18n import _
 from .model import ConversionError, Context, Extracted, Para, ProtectedError
 from .settings import Options
+
+def drm_message() -> str:
+    return _(DRM_MESSAGE)
+
 
 DRM_MESSAGE = (
     "il libro è protetto da DRM (blocco anticopia dell'editore). LeggiTutto non rimuove i DRM: "
@@ -244,7 +249,7 @@ def html_to_paras(root, opts: Options) -> list[Para]:
             elif name == "img":
                 alt = (child.get("alt") or "").strip()
                 if len(alt) > 3 and not re.search(r"\.(jpe?g|png|gif|svg|webp)$", alt, re.I):
-                    buffer.append(f" [Immagine: {alt}] ")
+                    buffer.append(" [%s] " % _("Immagine: {alt}").format(alt=alt))
             elif name == "table":
                 flush()
                 rows = []
@@ -296,7 +301,7 @@ def extract_mht(path: Path, opts: Options, ctx: Context) -> Extracted:
             soup = _soup(part.get_content())
             _strip_notes_single(soup, opts)
             return Extracted(paras=html_to_paras(_clean_web_page(soup), opts))
-    raise ConversionError("l'archivio web non contiene una pagina leggibile.")
+    raise ConversionError(_("l'archivio web non contiene una pagina leggibile."))
 
 
 # ---------------------------------------------------------------------------
@@ -308,7 +313,7 @@ _FONT_OBFUSCATION = {"http://www.idpf.org/2008/embedding", "http://ns.adobe.com/
 def check_epub_drm(zf: zipfile.ZipFile):
     names = set(zf.namelist())
     if "META-INF/rights.xml" in names or "META-INF/sinf.xml" in names:
-        raise ProtectedError(DRM_MESSAGE)
+        raise ProtectedError(drm_message())
     if "META-INF/encryption.xml" in names:
         root = etree.fromstring(zf.read("META-INF/encryption.xml"))
         for data in root.iter("{http://www.w3.org/2001/04/xmlenc#}EncryptedData"):
@@ -317,14 +322,14 @@ def check_epub_drm(zf: zipfile.ZipFile):
             algo = method.get("Algorithm", "") if method is not None else ""
             uri = (ref.get("URI", "") if ref is not None else "").lower()
             if algo not in _FONT_OBFUSCATION and not uri.endswith((".ttf", ".otf", ".woff", ".woff2")):
-                raise ProtectedError(DRM_MESSAGE)
+                raise ProtectedError(drm_message())
 
 
 def extract_epub(path: Path, opts: Options, ctx: Context) -> Extracted:
     try:
         zf = zipfile.ZipFile(path)
     except zipfile.BadZipFile as exc:
-        raise ConversionError(f"ePub non valido: {exc}") from exc
+        raise ConversionError(_("ePub non valido: {exc}").format(exc=exc)) from exc
     with zf:
         check_epub_drm(zf)
         container = etree.fromstring(zf.read("META-INF/container.xml"))
@@ -357,7 +362,7 @@ def extract_epub(path: Path, opts: Options, ctx: Context) -> Extracted:
         targets |= found
     paras: list[Para] = []
     for n, (name, soup) in enumerate(docs):
-        ctx.progress(n / max(len(docs), 1), f"Capitolo {n + 1} di {len(docs)}")
+        ctx.progress(n / max(len(docs), 1), _("Capitolo {n} di {total}").format(n=n + 1, total=len(docs)))
         ids = {t.split("#", 1)[1] for t in targets if t.split("#", 1)[0] == name}
         remove_notes(soup, opts, ids, refs_by_doc[name])
         paras.extend(html_to_paras(soup.body or soup, opts))
@@ -373,7 +378,7 @@ def extract_fb2(path: Path, opts: Options, ctx: Context) -> Extracted:
         with zipfile.ZipFile(path) as zf:
             name = next((n for n in zf.namelist() if n.lower().endswith(".fb2")), None)
             if not name:
-                raise ConversionError("l'archivio non contiene un libro FB2.")
+                raise ConversionError(_("l'archivio non contiene un libro FB2."))
             data = zf.read(name)
     root = etree.fromstring(data, etree.XMLParser(recover=True, huge_tree=True))
     paras: list[Para] = []
@@ -421,9 +426,9 @@ def extract_ebook_other(path: Path, opts: Options, ctx: Context) -> Extracted:
         # Campo "encryption" del primo record MOBI/PalmDOC: 0 = nessun DRM.
         first_record = int.from_bytes(head[78:82], "big")
         if len(head) >= first_record + 14 and int.from_bytes(head[first_record + 12:first_record + 14], "big") != 0:
-            raise ProtectedError(DRM_MESSAGE)
+            raise ProtectedError(drm_message())
     if path.suffix.lower() in (".kfx", ".azw4", ".azw8", ".kfx-zip"):
-        raise ProtectedError(DRM_MESSAGE)
+        raise ProtectedError(drm_message())
 
     with tempfile.TemporaryDirectory() as tmp:
         if path.suffix.lower() == ".djvu" or path.suffix.lower() == ".djv":
@@ -437,7 +442,7 @@ def extract_ebook_other(path: Path, opts: Options, ctx: Context) -> Extracted:
         try:
             converted = external.calibre_convert(path, "epub", Path(tmp))
         except Exception as exc:
-            ctx.log(f"Calibre non è riuscito a convertire il file: {exc}")
+            ctx.log(_("Calibre non è riuscito a convertire il file: {exc}").format(exc=exc))
         if converted is not None:
             return extract(converted, opts, ctx)
         try:
@@ -452,8 +457,8 @@ def extract_ebook_other(path: Path, opts: Options, ctx: Context) -> Extracted:
     except ProtectedError:
         raise
     except Exception:
-        raise ConversionError(
-            f"per i file {path.suffix} serve Calibre (gratuito, calibre-ebook.com): installalo e riprova.")
+        raise ConversionError(_(
+            "per i file {ext} serve Calibre (gratuito, calibre-ebook.com): installalo e riprova.").format(ext=path.suffix))
 
 
 # ---------------------------------------------------------------------------
@@ -491,7 +496,7 @@ def extract_markdown(path: Path, opts: Options, ctx: Context) -> Extracted:
             buf.clear()
 
     def inline(s: str) -> str:
-        s = re.sub(r"!\[([^\]]*)\]\([^)]*\)", lambda m: f"[Immagine: {m.group(1)}]" if m.group(1) else "", s)
+        s = re.sub(r"!\[([^\]]*)\]\([^)]*\)", lambda m: "[%s]" % _("Immagine: {alt}").format(alt=m.group(1)) if m.group(1) else "", s)
         s = re.sub(r"\[([^\]]+)\]\([^)]*\)", r"\1", s)
         s = re.sub(r"\[([^\]]+)\]\[[^\]]*\]", r"\1", s)
         s = re.sub(r"<[^>]+>", "", s)

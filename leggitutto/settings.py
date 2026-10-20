@@ -44,8 +44,16 @@ ENCODINGS = [
 ]
 
 
+UI_LANGUAGES = [
+    ("it", "Italiano"),
+    ("en", "English"),
+]
+
+
 @dataclass
 class Options:
+    # Lingua dei menu, dei messaggi e della guida
+    ui_language: str = "it"
     # Pulizia dei documenti
     remove_page_numbers: bool = True
     remove_headers_footers: bool = True

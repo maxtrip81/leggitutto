@@ -1,5 +1,7 @@
 # LeggiTutto
 
+*[English version](README.en.md)*
+
 **Converte qualsiasi file in un file di testo `.txt` pulito, pensato per chi legge con la sintesi vocale o con il display braille.**
 
 Creato da **Massimiliano Mascioli Trippa** — [max@maxtrip.it](mailto:max@maxtrip.it)
@@ -22,6 +24,10 @@ Funziona su Windows e macOS. Si usa interamente da tastiera ed è compatibile co
 - **Archivi ZIP** e **cartelle intere**: converte tutti i file contenuti.
 
 Il testo viene salvato accanto all'originale con lo stesso nome (`libro.pdf` → `libro.txt`), oppure in una cartella a scelta. Codifica UTF-8 (o ANSI per vecchi dispositivi braille), con a capo automatico facoltativo.
+
+## Lingua
+
+L'app è in italiano. Per passare all'inglese: menu **Strumenti → Lingua / Language → English**, oppure **Opzioni → Generale → Lingua / Language**. Si aggiornano subito menu, finestre, messaggi e guida, e la scelta viene ricordata. Anche l'installazione per Windows è disponibile in italiano e in inglese.
 
 ## Come si usa
 
