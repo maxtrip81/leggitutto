@@ -1,0 +1,27 @@
+# Interfaccia grafica accessibile (controlli nativi Windows e macOS)
+wxPython>=4.2.1
+# Documenti
+PyMuPDF>=1.24
+python-docx>=1.1
+python-pptx>=0.6.23
+openpyxl>=3.1
+xlrd>=2.0
+beautifulsoup4>=4.12
+lxml>=5.0
+striprtf>=0.0.26
+msoffcrypto-tool>=5.4
+charset-normalizer>=3.0
+mobi>=0.3.3
+# Immagini e OCR (richiede il programma Tesseract)
+Pillow>=10.0
+pytesseract>=0.3.10
+# Audio e video
+faster-whisper>=1.1
+av>=12
+sherpa-onnx>=1.10.30
+numpy
+certifi
+# Annunci al lettore di schermo
+accessible_output2>=0.17; sys_platform == "win32"
+pywin32; sys_platform == "win32"
+pyobjc-framework-Cocoa; sys_platform == "darwin"

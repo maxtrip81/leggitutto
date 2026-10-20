@@ -1,0 +1,52 @@
+name: Compila LeggiTutto
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            name: Windows
+          - os: macos-latest
+            name: macOS-AppleSilicon
+          - os: macos-15-intel
+            name: macOS-Intel
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Installa le dipendenze
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pyinstaller pytest
+      - name: Esegui i test
+        run: python -m pytest tests -q
+      - name: Compila l'applicazione
+        run: pyinstaller packaging/LeggiTutto.spec --noconfirm
+      - name: Crea l'installazione per Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress }
+          & $iscc packaging\installer.iss
+      - name: Crea l'immagine disco per macOS
+        if: runner.os == 'macOS'
+        run: |
+          codesign --force --deep --sign - dist/LeggiTutto.app
+          mkdir -p dist/dmg && cp -R dist/LeggiTutto.app dist/dmg/ && ln -s /Applications dist/dmg/Applicazioni
+          hdiutil create -volname LeggiTutto -srcfolder dist/dmg -ov -format UDZO dist/LeggiTutto-${{ matrix.name }}.dmg
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LeggiTutto-${{ matrix.name }}
+          path: |
+            dist/LeggiTutto-Setup.exe
+            dist/*.dmg
