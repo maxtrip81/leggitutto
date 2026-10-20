@@ -1,8 +1,10 @@
 """Testo della Guida mostrata con F1."""
 
-from . import APP_NAME, __version__
+from . import APP_NAME, AUTHOR, AUTHOR_EMAIL, COPYRIGHT, __version__
 
 GUIDE = f"""{APP_NAME} {__version__} - Guida
+
+Creato da {AUTHOR} ({AUTHOR_EMAIL}).
 
 {APP_NAME} trasforma qualsiasi file in un file di testo semplice (.txt), pulito e comodo da leggere con la sintesi vocale o con il display braille.
 
@@ -55,4 +57,8 @@ Canc: togli dall'elenco i file selezionati
 Control+Virgola: opzioni (sul Mac Comando+Virgola)
 F1: questa guida
 Sul Mac usa il tasto Comando al posto di Control.
+
+AUTORE
+{APP_NAME} è stato creato da {AUTHOR}. Per segnalazioni, suggerimenti o problemi scrivi a {AUTHOR_EMAIL}, anche dal menu Aiuto, voce "Scrivi all'autore".
+{COPYRIGHT}
 """

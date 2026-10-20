@@ -1,11 +1,20 @@
-; Installazione per Windows (Inno Setup 6). Compila prima con build_windows.bat.
-#define AppVersion "1.0.0"
+﻿; Installazione per Windows (Inno Setup 6). Compila prima con build_windows.bat.
+#ifndef AppVersion
+  #define AppVersion "1.0.1"
+#endif
 
 [Setup]
 AppId={{6E0B7C1A-4F43-4C1E-9C4B-1E7A2D5B9F10}
 AppName=LeggiTutto
 AppVersion={#AppVersion}
-AppPublisher=LeggiTutto
+AppPublisher=Massimiliano Mascioli Trippa
+AppContact=max@maxtrip.it
+AppSupportURL=mailto:max@maxtrip.it
+AppCopyright=© 2026 Massimiliano Mascioli Trippa
+VersionInfoCompany=Massimiliano Mascioli Trippa
+VersionInfoCopyright=© 2026 Massimiliano Mascioli Trippa
+VersionInfoDescription=Installazione di LeggiTutto
+VersionInfoVersion={#AppVersion}
 DefaultDirName={autopf}\LeggiTutto
 DefaultGroupName=LeggiTutto
 OutputDir=..\dist

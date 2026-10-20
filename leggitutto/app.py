@@ -15,7 +15,7 @@ from pathlib import Path
 
 import wx
 
-from . import APP_NAME, __version__, announce, external
+from . import APP_NAME, AUTHOR, AUTHOR_EMAIL, COPYRIGHT, __version__, announce, external
 from .help_text import GUIDE
 from .model import Cancelled, ConversionError, Context
 from .settings import ENCODINGS, LANGUAGES, WHISPER_MODELS, Options
@@ -33,6 +33,15 @@ def open_path(path: Path):
             subprocess.Popen(["xdg-open", str(path)])
     except Exception as exc:
         wx.MessageBox(f"Impossibile aprire {path}: {exc}", APP_NAME, wx.OK | wx.ICON_ERROR)
+
+
+def open_path_url(url: str):
+    import webbrowser
+
+    try:
+        webbrowser.open(url)
+    except Exception as exc:
+        wx.MessageBox(f"Impossibile aprire {url}: {exc}", APP_NAME, wx.OK | wx.ICON_ERROR)
 
 
 def labeled(parent, sizer, label, control, tooltip=""):
@@ -287,6 +296,7 @@ class MainFrame(wx.Frame):
         m = wx.Menu()
         self._menu(m, "&Guida\tF1", self.on_help, wx.ID_HELP)
         self._menu(m, "&Programmi aggiuntivi", self.on_tools)
+        self._menu(m, "&Scrivi all'autore", self.on_write_author)
         self._menu(m, "&Informazioni su " + APP_NAME, self.on_about, wx.ID_ABOUT)
         bar.Append(m, "&Aiuto")
         self.SetMenuBar(bar)
@@ -575,12 +585,18 @@ class MainFrame(wx.Frame):
         self.show_text("Programmi aggiuntivi", "\n".join(lines))
 
     def on_about(self, _):
-        wx.MessageBox(
-            f"{APP_NAME} {__version__}\n\nConverte qualsiasi file in testo semplice accessibile, "
-            "per la lettura con sintesi vocale e display braille.\n\n"
+        self.show_text("Informazioni su " + APP_NAME, (
+            f"{APP_NAME} {__version__}\n\n"
+            "Converte qualsiasi file in testo semplice accessibile, per la lettura con sintesi vocale "
+            "e display braille.\n\n"
+            f"Creato da {AUTHOR}\n"
+            f"Posta elettronica: {AUTHOR_EMAIL}\n"
+            f"{COPYRIGHT}\n\n"
             "Usa software libero: PyMuPDF, Tesseract, faster-whisper (modelli Whisper di OpenAI), "
-            "sherpa-onnx e modelli pyannote e WeSpeaker, wxPython.",
-            "Informazioni", wx.OK | wx.ICON_INFORMATION, self)
+            "sherpa-onnx con i modelli pyannote e WeSpeaker, wxPython."))
+
+    def on_write_author(self, _):
+        open_path_url(f"mailto:{AUTHOR_EMAIL}?subject={APP_NAME}%20{__version__}")
 
     def on_close(self, event):
         if self.busy:

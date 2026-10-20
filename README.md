@@ -2,6 +2,8 @@
 
 **Converte qualsiasi file in un file di testo `.txt` pulito, pensato per chi legge con la sintesi vocale o con il display braille.**
 
+Creato da **Massimiliano Mascioli Trippa** — [max@maxtrip.it](mailto:max@maxtrip.it)
+
 Funziona su Windows e macOS. Si usa interamente da tastiera ed è compatibile con NVDA, JAWS, Assistente vocale e VoiceOver: usa i controlli nativi del sistema e annuncia l'avanzamento attraverso il lettore di schermo.
 
 ## Cosa fa
@@ -49,7 +51,7 @@ Il flusso GitHub Actions in `.github/workflows/build.yml` compila automaticament
 
 Basta caricare il progetto su GitHub e avviare il flusso "Compila LeggiTutto" dalla scheda Actions (oppure creare un tag `v1.0.0`): i file si scaricano dagli "Artifacts".
 
-L'app per Mac non è firmata con un certificato Apple: la prima volta aprila con **Ctrl+clic → Apri**, oppure da Terminale: `xattr -dr com.apple.quarantine /Applications/LeggiTutto.app`.
+Finché non viene attivata la firma digitale (vedi [FIRMA_DIGITALE.md](FIRMA_DIGITALE.md)) Windows e macOS mostrano un avviso al primo avvio. L'app per Mac non è firmata con un certificato Apple: la prima volta aprila con **Ctrl+clic → Apri**, oppure da Terminale: `xattr -dr com.apple.quarantine /Applications/LeggiTutto.app`.
 
 ### Compilare da sé
 - **Windows**: installa Python 3.12 da python.org, poi fai doppio clic su `packaging\build_windows.bat`. Se è installato Inno Setup crea anche l'installazione.
@@ -97,3 +99,9 @@ leggitutto/ocr.py          OCR (Tesseract)
 tests/                     prove automatiche (python -m pytest tests)
 packaging/                 ricetta PyInstaller, script di compilazione, installazione Windows
 ```
+
+## Autore
+
+LeggiTutto è stato creato da **Massimiliano Mascioli Trippa**. Per segnalazioni, suggerimenti o problemi scrivi a [max@maxtrip.it](mailto:max@maxtrip.it).
+
+© 2026 Massimiliano Mascioli Trippa

@@ -18,6 +18,14 @@ jobs:
           - os: macos-15-intel
             name: macOS-Intel
     runs-on: ${{ matrix.os }}
+    env:
+      # Firma e notarizzazione Apple: si attivano da sole quando questi "secrets" sono impostati
+      # nel repository (Settings > Secrets and variables > Actions). Vedi FIRMA_DIGITALE.md.
+      MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+      MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -29,21 +37,49 @@ jobs:
           pip install -r requirements.txt pyinstaller pytest
       - name: Esegui i test
         run: python -m pytest tests -q
+      - name: Prepara il certificato Apple
+        if: runner.os == 'macOS' && env.MACOS_CERTIFICATE != ''
+        run: |
+          KEYCHAIN="$RUNNER_TEMP/firma.keychain-db"
+          KEYCHAIN_PASSWORD=$(openssl rand -hex 16)
+          echo "$MACOS_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/certificato.p12"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security import "$RUNNER_TEMP/certificato.p12" -P "$MACOS_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN"
+          security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | tr -d '"')
+          IDENTITY=$(security find-identity -v -p codesigning "$KEYCHAIN" | grep "Developer ID Application" | head -n 1 | sed -E 's/.*"(.*)"/\1/')
+          test -n "$IDENTITY"
+          echo "MACOS_SIGN_IDENTITY=$IDENTITY" >> "$GITHUB_ENV"
       - name: Compila l'applicazione
         run: pyinstaller packaging/LeggiTutto.spec --noconfirm
       - name: Crea l'installazione per Windows
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
+          $version = (Select-String -Path leggitutto\__init__.py -Pattern '__version__ = "(.+)"').Matches[0].Groups[1].Value
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
           if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress }
-          & $iscc packaging\installer.iss
+          & $iscc "/DAppVersion=$version" packaging\installer.iss
       - name: Crea l'immagine disco per macOS
         if: runner.os == 'macOS'
         run: |
-          codesign --force --deep --sign - dist/LeggiTutto.app
+          if [ -z "${MACOS_SIGN_IDENTITY:-}" ]; then
+            # Senza certificato: firma "ad hoc", necessaria per avviare l'app sui Mac con processore Apple.
+            codesign --force --deep --sign - dist/LeggiTutto.app
+          fi
+          codesign --verify --deep dist/LeggiTutto.app
           mkdir -p dist/dmg && cp -R dist/LeggiTutto.app dist/dmg/ && ln -s /Applications dist/dmg/Applicazioni
-          hdiutil create -volname LeggiTutto -srcfolder dist/dmg -ov -format UDZO dist/LeggiTutto-${{ matrix.name }}.dmg
+          DMG=dist/LeggiTutto-${{ matrix.name }}.dmg
+          hdiutil create -volname LeggiTutto -srcfolder dist/dmg -ov -format UDZO "$DMG"
+          if [ -n "${MACOS_SIGN_IDENTITY:-}" ]; then
+            codesign --force --timestamp --sign "$MACOS_SIGN_IDENTITY" "$DMG"
+            if [ -n "$APPLE_ID" ]; then
+              xcrun notarytool submit "$DMG" --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_PASSWORD" --wait
+              xcrun stapler staple "$DMG"
+            fi
+          fi
       - uses: actions/upload-artifact@v4
         with:
           name: LeggiTutto-${{ matrix.name }}
@@ -73,12 +109,15 @@ jobs:
             f=$(ls artifacts/LeggiTutto-$name/*.dmg 2>/dev/null | head -n 1)
             [ -n "$f" ] && cp "$f" upload/LeggiTutto-$name.dmg
           done
+          # Impronte SHA-256: permettono di verificare che i file scaricati siano integri e originali.
+          (cd upload && sha256sum * > SHA256SUMS.txt)
           ls -la upload
           version=$(python3 -c "import re; print(re.search(r'__version__ = \"(.+?)\"', open('leggitutto/__init__.py').read()).group(1))")
           tag="v$version"
           if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release upload "$tag" upload/* --clobber --repo "$GITHUB_REPOSITORY"
+            gh release edit "$tag" --notes-file packaging/release_notes.md --repo "$GITHUB_REPOSITORY"
           else
             gh release create "$tag" upload/* --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
-              --title "LeggiTutto $version" --notes-file packaging/release_notes.md
+              --title "LeggiTutto $version" --notes-file packaging/release_notes.md --latest
           fi
